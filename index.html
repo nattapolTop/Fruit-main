@@ -64,17 +64,16 @@
       };
 
       const connectOptions = {
-        onSuccess: () => {
-          document.getElementById("status").innerText = "MQTT: Connected to " + mqttConfig.host;
-          console.log("Connected to MQTT broker");
-        },
-        onFailure: (err) => {
-          document.getElementById("status").innerText = "MQTT: Connection Failed";
-          console.error("Connection failed:", err);
-        },
-        useSSL: mqttConfig.port === 8884, // SSL only if using 8884
-      };
-
+    onSuccess: () => {
+        document.getElementById("status").innerText = "MQTT: Connected to " + mqttConfig.host;
+        console.log("Connected to MQTT broker");
+    },
+    onFailure: (err) => {
+        document.getElementById("status").innerText = "MQTT: Connection Failed";
+        console.error("Connection failed:", err);
+    },
+    useSSL: true  // บังคับใช้ SSL สำหรับพอร์ต 8884
+};
       if (mqttConfig.username && mqttConfig.password) {
         connectOptions.userName = mqttConfig.username;
         connectOptions.password = mqttConfig.password;
@@ -158,6 +157,7 @@
   </script>
 </body>
 </html>
+
 
 
 
