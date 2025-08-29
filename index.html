@@ -29,6 +29,10 @@
 
   <div id="status">MQTT: Not connected</div>
 
+  <!-- MQTT Connect/Disconnect Buttons -->
+  <button type="button" id="connectBtn" onclick="connectMQTT()">Connect MQTT</button>
+  <button type="button" id="disconnectBtn" onclick="disconnectMQTT()" disabled>Disconnect MQTT</button>
+
   <!-- Control buttons -->
   <button type="button" onclick="init('environment')">Start (Back Camera)</button>
   <button type="button" onclick="init('user')">Start (Front Camera)</button>
@@ -45,6 +49,11 @@
 
     // ---- MQTT CONNECT ----
     function connectMQTT() {
+      if (client && client.isConnected()) {
+        document.getElementById("status").innerText = "MQTT: Already connected";
+        return;
+      }
+
       mqttConfig = {
         host: document.getElementById("host").value,
         port: parseInt(document.getElementById("port").value),
@@ -57,6 +66,8 @@
       client.onConnectionLost = (responseObject) => {
         document.getElementById("status").innerText = "MQTT: Connection Lost";
         console.error("MQTT connection lost:", responseObject.errorMessage);
+        document.getElementById("connectBtn").disabled = false;
+        document.getElementById("disconnectBtn").disabled = true;
       };
 
       client.onMessageArrived = (message) => {
@@ -64,22 +75,32 @@
       };
 
       const connectOptions = {
-    onSuccess: () => {
-        document.getElementById("status").innerText = "MQTT: Connected to " + mqttConfig.host;
-        console.log("Connected to MQTT broker");
-    },
-    onFailure: (err) => {
-        document.getElementById("status").innerText = "MQTT: Connection Failed";
-        console.error("Connection failed:", err);
-    },
-    useSSL: true  // บังคับใช้ SSL สำหรับพอร์ต 8884
-};
-      if (mqttConfig.username && mqttConfig.password) {
-        connectOptions.userName = mqttConfig.username;
-        connectOptions.password = mqttConfig.password;
-      }
+        onSuccess: () => {
+          document.getElementById("status").innerText = "MQTT: Connected to " + mqttConfig.host;
+          console.log("Connected to MQTT broker");
+          document.getElementById("connectBtn").disabled = true;
+          document.getElementById("disconnectBtn").disabled = false;
+        },
+        onFailure: (err) => {
+          document.getElementById("status").innerText = "MQTT: Connection Failed";
+          console.error("Connection failed:", err);
+        },
+        useSSL: true
+      };
 
       client.connect(connectOptions);
+    }
+
+    function disconnectMQTT() {
+      if (client && client.isConnected()) {
+        client.disconnect();
+        document.getElementById("status").innerText = "MQTT: Disconnected";
+        console.log("MQTT disconnected");
+        document.getElementById("connectBtn").disabled = false;
+        document.getElementById("disconnectBtn").disabled = true;
+      } else {
+        document.getElementById("status").innerText = "MQTT: Not connected";
+      }
     }
 
     function publishMessage(payload) {
@@ -92,8 +113,6 @@
 
     // ---- MODEL INIT ----
     async function init(facingMode) {
-      connectMQTT(); // Connect MQTT before starting webcam
-
       const modelURL = URL + "model.json";
       const metadataURL = URL + "metadata.json";
 
@@ -152,12 +171,10 @@
       if (client && client.isConnected()) {
         client.disconnect();
         document.getElementById("status").innerText = "MQTT: Disconnected";
+        document.getElementById("connectBtn").disabled = false;
+        document.getElementById("disconnectBtn").disabled = true;
       }
     }
   </script>
 </body>
 </html>
-
-
-
-
