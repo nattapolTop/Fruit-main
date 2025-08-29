@@ -24,9 +24,7 @@
     <input id="host" placeholder="Host (mqtt-dashboard.com)">
     <input id="port" placeholder="Port (8884)" type="number">
     <input id="clientId" placeholder="Client ID (clientId-Mymio7tkoB)">
-    <input id="username" placeholder="Username (TOP)">
-    <input id="password" placeholder="Password (1111)" type="password">
-    <input id="topic" placeholder="Topic (testtopic/#)">
+    <input id="topic" placeholder="Topic (Fruit)">
   </div>
 
   <div id="status">MQTT: Not connected</div>
@@ -51,8 +49,6 @@
         host: document.getElementById("host").value,
         port: parseInt(document.getElementById("port").value),
         clientId: document.getElementById("clientId").value || "webclient-" + Math.random().toString(16).substr(2, 8),
-        username: document.getElementById("username").value,
-        password: document.getElementById("password").value,
         topic: document.getElementById("topic").value || "tm/prediction"
       };
 
@@ -162,4 +158,3 @@
   </script>
 </body>
 </html>
-
