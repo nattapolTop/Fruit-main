@@ -21,7 +21,7 @@
   
   <!-- MQTT Configuration -->
   <div class="config-container">
-    <input id="host" placeholder="Host (mqtt-dashboard.com)">
+    <input id="host" placeholder="Host (broker.hivemq.com)">
     <input id="port" placeholder="Port (8884)" type="number">
     <input id="clientId" placeholder="Client ID (clientId-TEST1235)">
     <input id="topic" placeholder="Topic (Fruit)">
@@ -47,21 +47,23 @@
     let model, webcam, labelContainer, maxPredictions;
     let client, mqttConfig;
 
-    // ---- MQTT CONNECT ----
+    // ✅ แก้ฟังก์ชัน connectMQTT ให้ใช้ WebSocket URL
     function connectMQTT() {
       if (client && client.isConnected()) {
         document.getElementById("status").innerText = "MQTT: Already connected";
         return;
       }
 
-      mqttConfig = {
-        host: document.getElementById("host").value,
-        port: parseInt(document.getElementById("port").value),
-        clientId: document.getElementById("clientId").value || "webclient-" + Math.random().toString(16).substr(2, 8),
-        topic: document.getElementById("topic").value || "tm/prediction"
-      };
+      const host = document.getElementById("host").value.trim();
+      const port = document.getElementById("port").value.trim();
+      const clientId = document.getElementById("clientId").value || "webclient-" + Math.random().toString(16).substr(2, 8);
+      const topic = document.getElementById("topic").value || "tm/prediction";
 
-      client = new Paho.MQTT.Client(mqttConfig.host, mqttConfig.port, mqttConfig.clientId);
+      const wsUrl = `wss://${host}:${port}/mqtt`;  // ✅ ใช้ WebSocket URL
+
+      mqttConfig = { host, port, clientId, topic };
+
+      client = new Paho.MQTT.Client(wsUrl, clientId);  // ✅ ใช้ wsUrl แทน host, port แยก
 
       client.onConnectionLost = (responseObject) => {
         document.getElementById("status").innerText = "MQTT: Connection Lost";
@@ -76,7 +78,7 @@
 
       const connectOptions = {
         onSuccess: () => {
-          document.getElementById("status").innerText = "MQTT: Connected to " + mqttConfig.host;
+          document.getElementById("status").innerText = "MQTT: Connected to " + host;
           console.log("Connected to MQTT broker");
           document.getElementById("connectBtn").disabled = true;
           document.getElementById("disconnectBtn").disabled = false;
@@ -111,7 +113,6 @@
       }
     }
 
-    // ---- MODEL INIT ----
     async function init(facingMode) {
       const modelURL = URL + "model.json";
       const metadataURL = URL + "metadata.json";
@@ -154,7 +155,7 @@
         }
       }
 
-      // Send top prediction to MQTT
+      // ส่งข้อมูลไปยัง MQTT
       publishMessage(JSON.stringify({
         class: topPrediction.className,
         probability: topPrediction.probability.toFixed(2),
