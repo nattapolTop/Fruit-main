@@ -21,9 +21,9 @@
 
   <!-- MQTT Configuration -->
   <div class="config-container">
-    <input id="host" placeholder="Host (mqtt-dashboard.com)">
+    <input id="host" placeholder="Host (broker.hivemq.com)">
     <input id="port" type="number" placeholder="Port (8884)">
-    <input id="clientId" placeholder="Client ID (clientId-TEST1235)">
+    <input id="clientId" placeholder="Client ID (clientId-TOP1235)">
     <input id="topic" placeholder="Topic (Fruit)">
   </div>
 
@@ -72,6 +72,7 @@
         onFailure: (err) => {
           document.getElementById("status").innerText = "MQTT: Connection Failed";
           console.error("Connection failed:", err);
+          console.error("MQTT Connection failed:", err.errorMessage);
         }
       };
 
@@ -162,4 +163,5 @@
   </script>
 </body>
 </html>
+
 
