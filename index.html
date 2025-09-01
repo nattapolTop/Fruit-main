@@ -1,171 +1,315 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Teachable Machine + HiveMQ MQTT</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
-  <script src="https://unpkg.com/paho-mqtt/mqttws31.min.js"></script>
-  <style>
-    body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 0; }
-    #webcam-container { max-width: 100%; margin: 10px auto; }
-    video { max-width: 100%; height: auto; }
-    #label-container { margin: 10px; font-size: 1.2em; }
-    button, input { padding: 10px; margin: 5px; font-size: 1em; }
-    #status { margin: 10px; color: green; }
-    .config-container { margin: 10px; }
-  </style>
+  <title>Teachable Machine Image Model (Mobile) with MQTT</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+  <!-- HiveMQ WebSocket MQTT Client -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 0;
+    }
+    #webcam-container {
+      max-width: 100%;
+      margin: 10px auto;
+    }
+    video {
+      max-width: 100%;
+      height: auto;
+    }
+    #label-container {
+      margin: 10px;
+      font-size: 1.2em;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 1em;
+      margin: 5px;
+    }
+    #mqtt-status {
+      padding: 10px;
+      margin: 10px;
+      border-radius: 5px;
+      font-weight: bold;
+    }
+    .connected {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .disconnected {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .connecting {
+      background-color: #fff3cd;
+      color: #856404;
+    }
+  </style>
 </head>
 <body>
-  <div>Teachable Machine + HiveMQ MQTT</div>
+  <div>Teachable Machine Image Model (Mobile) with MQTT</div>
+ 
+  <div id="mqtt-status" class="disconnected">MQTT: Disconnected</div>
+ 
+  <button type="button" onclick="connectMQTT()">Connect MQTT</button>
+  <button type="button" onclick="disconnectMQTT()">Disconnect MQTT</button>
+  <br>
+  <button type="button" onclick="init('environment')">Start (Back Camera)</button>
+  <button type="button" onclick="init('user')">Start (Front Camera)</button>
+  <button type="button" onclick="stop()">Stop</button>
+ 
+  <div id="webcam-container"></div>
+  <div id="label-container"></div>
 
-    <div class="config-container">
-    <input id="host" placeholder="Host (broker.hivemq.com)">
-    <input id="port" type="number" placeholder="Port (8884)">
-    <input id="path" placeholder="Path (/mqtt)">
-    <input id="clientId" placeholder="Client ID (clientId-TOP1235)">
-    <input id="topic" placeholder="Topic (Fruit)">
-  </div>
+  <script type="text/javascript">
+    // Teachable Machine Model URL
+    const URL = "https://teachablemachine.withgoogle.com/models/K3jhNKhra/";
+    let model, webcam, labelContainer, maxPredictions;
+   
+    // MQTT Configuration for HiveMQ
+    let mqttClient = null;
+    const mqttConfig = {
+      host: 'broker.hivemq.com',
+      port: 8884,
+      protocol: 'wss',
+      clientId: 'clientId-qJSfXzfALr' + Math.random().toString(16).substr(2, 8)
+    };
+   
+    // MQTT Topics
+    const MQTT_TOPIC_PREDICTIONS = 'Vegetable';
+    const MQTT_TOPIC_STATUS = 'teachable_machine/status';
+   
+    // MQTT Connection Functions
+    function connectMQTT() {
+      const statusEl = document.getElementById('mqtt-status');
+      statusEl.className = 'connecting';
+      statusEl.innerText = 'MQTT: Connecting...';
+     
+      const brokerUrl = "wss://broker.hivemq.com:8884/mqtt";
+      console.log("Connecting to MQTT broker:", brokerUrl);
+     
+      try {
+        mqttClient = mqtt.connect(brokerUrl, {
+          clientId: mqttConfig.clientId,
+          username: mqttConfig.username,
+          password: mqttConfig.password,
+          keepalive: 60,
+          connectTimeout: 15000,
+          reconnectPeriod: 1000,
+         
+        });
+       
+        mqttClient.on('connect', function() {
+          console.log('MQTT Connected to HiveMQ');
+          statusEl.className = 'connected';
+          statusEl.innerText = 'MQTT: Connected to HiveMQ';
+         
+          // ส่งสถานะการเชื่อมต่อ
+          publishMQTT(MQTT_TOPIC_STATUS, {
+            status: 'connected',
+            clientId: mqttConfig.clientId,
+            timestamp: new Date().toISOString()
+          });
+        });
+       
+        mqttClient.on('error', function(error) {
+          console.error('MQTT Connection Error:', error);
+          statusEl.className = 'disconnected';
+          statusEl.innerText = `MQTT: Connection Error - ${error.message}`;
+        });
+       
+        mqttClient.on('offline', function() {
+          console.log('MQTT Offline');
+          statusEl.className = 'disconnected';
+          statusEl.innerText = 'MQTT: Offline';
+        });
+       
+      } catch (error) {
+        console.error('MQTT Setup Error:', error);
+        statusEl.className = 'disconnected';
+        statusEl.innerText = 'MQTT: Setup Error';
+      }
+    }
+   
+    function disconnectMQTT() {
+      if (mqttClient) {
+        // ส่งสถานะการตัดการเชื่อมต่อ
+        publishMQTT(MQTT_TOPIC_STATUS, {
+          status: 'disconnecting',
+          clientId: mqttConfig.clientId,
+          timestamp: new Date().toISOString()
+        });
+       
+        mqttClient.end();
+        mqttClient = null;
+       
+        const statusEl = document.getElementById('mqtt-status');
+        statusEl.className = 'disconnected';
+        statusEl.innerText = 'MQTT: Disconnected';
+      }
+    }
+   
+    function publishMQTT(topic, data) {
+      if (mqttClient && mqttClient.connected) {
+        const message = typeof data === 'string' ? data : JSON.stringify(data);
+        mqttClient.publish(topic, message, { qos: 0, retain: false }, function(error) {
+          if (error) {
+            console.error('MQTT Publish Error:', error);
+          } else {
+            console.log('MQTT Message Published:', topic, message);
+          }
+        });
+      }
+    }
+   
+    // Teachable Machine Functions
+    async function init(facingMode) {
+      const modelURL = URL + "model.json";
+      const metadataURL = URL + "metadata.json";
+     
+      try {
+        model = await tmImage.load(modelURL, metadataURL);
+        maxPredictions = model.getTotalClasses();
+       
+        // ตั้งค่า Webcam สำหรับมือถือ
+        webcam = new tmImage.Webcam(224, 224, false);
+        await webcam.setup({ facingMode: facingMode });
+        await webcam.play();
+       
+        if (!webcam.canvas) {
+          throw new Error("Webcam canvas is not initialized");
+        }
+       
+        console.log("Webcam initialized, width:", webcam.canvas.width, "facingMode:", facingMode);
+       
+        document.getElementById("webcam-container").appendChild(webcam.canvas);
+        labelContainer = document.getElementById("label-container");
+        labelContainer.innerHTML = "";
+       
+        for (let i = 0; i < maxPredictions; i++) {
+          labelContainer.appendChild(document.createElement("div"));
+        }
+       
+        // ส่งสถานะการเริ่มต้นกล้อง
+        publishMQTT(MQTT_TOPIC_STATUS, {
+          status: 'camera_started',
+          facingMode: facingMode,
+          timestamp: new Date().toISOString()
+        });
+       
+        window.requestAnimationFrame(loop);
+       
+      } catch (e) {
+        console.error("Webcam setup failed:", e);
+        document.getElementById("label-container").innerText = "Error: " + e.message;
+       
+        // ส่งข้อผิดพลาด
+        publishMQTT(MQTT_TOPIC_STATUS, {
+          status: 'error',
+          error: e.message,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+   
+    async function loop() {
+      if (webcam) {
+        webcam.update();
+        await predict();
+        window.requestAnimationFrame(loop);
+      }
+    }
+   
+    async function predict() {
+      if (!model || !webcam) return;
+     
+      try {
+        const prediction = await model.predict(webcam.canvas);
+        const predictions = [];
+       
+        for (let i = 0; i < maxPredictions; i++) {
+          const className = prediction[i].className;
+          const probability = prediction[i].probability.toFixed(2);
+          const classPrediction = className + ": " + probability;
+         
+          labelContainer.childNodes[i].innerHTML = classPrediction;
+         
+          predictions.push({
+            className: className,
+            probability: parseFloat(probability)
+          });
+        }
+       
+        // หาผลลัพธ์ที่มีความน่าจะเป็นสูงสุด
+        const topPrediction = predictions.reduce((prev, current) =>
+          (prev.probability > current.probability) ? prev : current
+        );
+       
+        // ตั้งค่าเกณฑ์เสถียร
+        const STABLE_THRESHOLD = 0.95;      // ค่าความน่าจะเป็นขั้นต่ำ
+        const STABLE_DURATION = 2000;       // หน่วยเป็นมิลลิวินาที (2 วินาที)
+       
+        // ตรวจสอบว่าเป็น class เดิม และมีค่า >= 0.95 ต่อเนื่องหรือไม่
+        if (topPrediction.probability >= STABLE_THRESHOLD) {
+          if (window.lastStableClass !== topPrediction.className) {
+            // ถ้าเปลี่ยน class ใหม่ เริ่มนับใหม่
+            window.lastStableClass = topPrediction.className;
+            window.stableStartTime = Date.now();
+          } else {
+            // ถ้า class เดิม และเวลาคงที่ > STABLE_DURATION
+            const duration = Date.now() - window.stableStartTime;
+            if (
+              duration >= STABLE_DURATION &&
+              (!window.lastMqttSend || Date.now() - window.lastMqttSend > STABLE_DURATION)
+            ) {
+              publishMQTT(MQTT_TOPIC_PREDICTIONS, topPrediction.className);
+              window.lastMqttSend = Date.now();
+              console.log(`Sent stable class: ${topPrediction.className} (held for ${duration}ms)`);
+            }
+          }
+        } else {
+          // ค่าไม่ถึงเกณฑ์ -> รีเซ็ต
+          window.lastStableClass = null;
+          window.stableStartTime = null;
+        }
 
-  <div id="status">MQTT: Not connected</div>
-
-    <button type="button" onclick="init('environment')">Start (Back Camera)</button>
-  <button type="button" onclick="init('user')">Start (Front Camera)</button>
-  <button type="button" onclick="stop()">Stop</button>
-
-  <div id="webcam-container"></div>
-  <div id="label-container"></div>
-
-  <script type="text/javascript">
-    const URL = "https://teachablemachine.withgoogle.com/models/K3jhNKhra/";
-
-    let model, webcam, labelContainer, maxPredictions;
-    let client, mqttConfig;
-
-// ---- MQTT CONNECT ----
-function connectMQTT() {
-  mqttConfig = {
-    host: document.getElementById("host").value,
-    port: parseInt(document.getElementById("port").value),
-    clientId: document.getElementById("clientId").value || "webclient-" + Math.random().toString(16).substr(2, 8),
-    topic: document.getElementById("topic").value || "tm/prediction"
-  };
-
-  // แก้ไข: สร้าง URL ที่สมบูรณ์แบบสำหรับ WebSocket ที่ปลอดภัย (WSS)
-  // ต้องรวม path เป็นส่วนหนึ่งของ URL ด้วย
-  const mqttUrl = "wss://" + mqttConfig.host + ":" + mqttConfig.port + "/mqtt";
-  client = new Paho.MQTT.Client(mqttUrl, mqttConfig.clientId);
-
-  client.onConnectionLost = (responseObject) => {
-    document.getElementById("status").innerText = "MQTT: Connection Lost";
-    console.error("MQTT connection lost:", responseObject.errorMessage);
-  };
-
-  client.onMessageArrived = (message) => {
-    console.log("Message received:", message.payloadString);
-  };
-
-  const connectOptions = {
-    // เนื่องจากเราใช้ wss:// ใน URL แล้ว จึงไม่จำเป็นต้องใช้ useSSL: true ซ้ำ
-    onSuccess: () => {
-      document.getElementById("status").innerText = "MQTT: Connected to " + mqttConfig.host;
-      console.log("Connected to MQTT broker");
-    },
-    onFailure: (err) => {
-      document.getElementById("status").innerText = "MQTT: Connection Failed";
-      console.error("Connection failed:", err);
-      console.error("MQTT Connection failed:", err.errorMessage);
-    }
-  };
-
-  if (mqttConfig.username && mqttConfig.password) {
-    connectOptions.userName = mqttConfig.username;
-    connectOptions.password = mqttConfig.password;
-  }
-
-  client.connect(connectOptions);
-}
-    function publishMessage(payload) {
-      if (client && client.isConnected()) {
-        const message = new Paho.MQTT.Message(payload);
-        message.destinationName = mqttConfig.topic;
-        client.send(message);
-      } else {
-        console.warn("MQTT is not connected, message not sent:", payload);
-      }
-    }
-
-    // ---- MODEL INIT ----
-    async function init(facingMode) {
-      connectMQTT(); // Connect MQTT ก่อนเริ่มการทำงานของกล้อง
-
-      const modelURL = URL + "model.json";
-      const metadataURL = URL + "metadata.json";
-
-      model = await tmImage.load(modelURL, metadataURL);
-      maxPredictions = model.getTotalClasses();
-
-      webcam = new tmImage.Webcam(224, 224, false);
-      try {
-        await webcam.setup({ facingMode: facingMode });
-        await webcam.play();
-        if (!webcam.canvas) throw new Error("Webcam canvas is not initialized");
-        window.requestAnimationFrame(loop);
-      } catch (e) {
-        console.error("Webcam setup failed:", e);
-        document.getElementById("label-container").innerText = "Error: " + e.message;
-        return;
-      }
-
-      document.getElementById("webcam-container").appendChild(webcam.canvas);
-      labelContainer = document.getElementById("label-container");
-      labelContainer.innerHTML = "";
-      for (let i = 0; i < maxPredictions; i++) {
-        labelContainer.appendChild(document.createElement("div"));
-      }
-    }
-
-    async function loop() {
-      webcam.update();
-      await predict();
-      window.requestAnimationFrame(loop);
-    }
-
-    async function predict() {
-      const prediction = await model.predict(webcam.canvas);
-      let topPrediction = prediction[0];
-      for (let i = 0; i < maxPredictions; i++) {
-        const classPrediction = prediction[i].className + ": " + prediction[i].probability.toFixed(2);
-        labelContainer.childNodes[i].innerHTML = classPrediction;
-        if (prediction[i].probability > topPrediction.probability) {
-          topPrediction = prediction[i];
-        }
-      }
-
-      // ส่งข้อมูลไปยัง MQTT
-      publishMessage(JSON.stringify({
-        class: topPrediction.className,
-        probability: topPrediction.probability.toFixed(2),
-        timestamp: new Date().toISOString()
-      }));
-    }
-
-    function stop() {
-      if (webcam) {
-        webcam.stop();
-        document.getElementById("webcam-container").innerHTML = '';
-        document.getElementById("label-container").innerHTML = '';
-      }
-      if (client && client.isConnected()) {
-        client.disconnect();
-        document.getElementById("status").innerText = "MQTT: Disconnected";
-      }
-    }
-  </script>
+       
+      } catch (error) {
+        console.error('Prediction error:', error);
+      }
+    }
+   
+    function stop() {
+      if (webcam) {
+        webcam.stop();
+        document.getElementById("webcam-container").innerHTML = '';
+        document.getElementById("label-container").innerHTML = '';
+       
+        // ส่งสถานะการหยุด
+        publishMQTT(MQTT_TOPIC_STATUS, {
+          status: 'camera_stopped',
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+   
+    // Auto-connect MQTT เมื่อโหลดหน้าเว็บ
+    window.addEventListener('load', function() {
+      setTimeout(connectMQTT, 1000); // รอ 1 วินาทีก่อนเชื่อมต่อ
+    });
+   
+    // ตัดการเชื่อมต่อ MQTT เมื่อปิดหน้าเว็บ
+    window.addEventListener('beforeunload', function() {
+      disconnectMQTT();
+    });
+  </script>
 </body>
 </html>
-
-
 
 
 
