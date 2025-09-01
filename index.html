@@ -1,168 +1,167 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Teachable Machine + HiveMQ MQTT</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
-  <script src="https://unpkg.com/paho-mqtt/mqttws31.min.js"></script>
-  <style>
-    body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 0; }
-    #webcam-container { max-width: 100%; margin: 10px auto; }
-    video { max-width: 100%; height: auto; }
-    #label-container { margin: 10px; font-size: 1.2em; }
-    button, input { padding: 10px; margin: 5px; font-size: 1em; }
-    #status { margin: 10px; color: green; }
-    .config-container { margin: 10px; }
-  </style>
+  <title>Teachable Machine + HiveMQ MQTT</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+  <script src="https://unpkg.com/paho-mqtt/mqttws31.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 0; }
+    #webcam-container { max-width: 100%; margin: 10px auto; }
+    video { max-width: 100%; height: auto; }
+    #label-container { margin: 10px; font-size: 1.2em; }
+    button, input { padding: 10px; margin: 5px; font-size: 1em; }
+    #status { margin: 10px; color: green; }
+    .config-container { margin: 10px; }
+  </style>
 </head>
 <body>
-  <div>Teachable Machine + HiveMQ MQTT</div>
+  <div>Teachable Machine + HiveMQ MQTT</div>
 
-  <!-- MQTT Configuration -->
-  <div class="config-container">
-    <input id="host" placeholder="Host (broker.hivemq.com)">
-    <input id="port" type="number" placeholder="Port (8884)">
-    <input id="clientId" placeholder="Client ID (clientId-TOP1235)">
-    <input id="topic" placeholder="Topic (Fruit)">
-  </div>
+    <div class="config-container">
+    <input id="host" placeholder="Host (broker.hivemq.com)">
+    <input id="port" type="number" placeholder="Port (8884)">
+    <input id="path" placeholder="Path (/mqtt)">
+    <input id="clientId" placeholder="Client ID (clientId-TOP1235)">
+    <input id="topic" placeholder="Topic (Fruit)">
+  </div>
 
-  <div id="status">MQTT: Not connected</div>
+  <div id="status">MQTT: Not connected</div>
 
-  <!-- Control buttons -->
-  <button type="button" onclick="init('environment')">Start (Back Camera)</button>
-  <button type="button" onclick="init('user')">Start (Front Camera)</button>
-  <button type="button" onclick="stop()">Stop</button>
+    <button type="button" onclick="init('environment')">Start (Back Camera)</button>
+  <button type="button" onclick="init('user')">Start (Front Camera)</button>
+  <button type="button" onclick="stop()">Stop</button>
 
-  <div id="webcam-container"></div>
-  <div id="label-container"></div>
+  <div id="webcam-container"></div>
+  <div id="label-container"></div>
 
-  <script type="text/javascript">
-    const URL = "https://teachablemachine.withgoogle.com/models/K3jhNKhra/";
+  <script type="text/javascript">
+    const URL = "https://teachablemachine.withgoogle.com/models/K3jhNKhra/";
 
-    let model, webcam, labelContainer, maxPredictions;
-    let client, mqttConfig;
+    let model, webcam, labelContainer, maxPredictions;
+    let client, mqttConfig;
 
-    // ---- MQTT CONNECT ----
-    function connectMQTT() {
-      mqttConfig = {
-        host: document.getElementById("host").value,
-        port: parseInt(document.getElementById("port").value),
-        clientId: document.getElementById("clientId").value || "webclient-" + Math.random().toString(16).substr(2, 8),
-        topic: document.getElementById("topic").value || "tm/prediction"
-      };
+    // ---- MQTT CONNECT ----
+    function connectMQTT() {
+      mqttConfig = {
+        host: document.getElementById("host").value,
+        port: parseInt(document.getElementById("port").value),
+        path: document.getElementById("path").value || "/mqtt",
+        clientId: document.getElementById("clientId").value || "webclient-" + Math.random().toString(16).substr(2, 8),
+        topic: document.getElementById("topic").value || "tm/prediction"
+      };
 
-      client = new Paho.MQTT.Client(mqttConfig.host, mqttConfig.port, "/mqtt", mqttConfig.clientId);
+      // แก้ไข: เพิ่ม path เพื่อให้ Paho.MQTT.Client ทำงานกับ WebSocket ได้
+      client = new Paho.MQTT.Client(mqttConfig.host, mqttConfig.port, mqttConfig.path, mqttConfig.clientId);
 
-      client.onConnectionLost = (responseObject) => {
-        document.getElementById("status").innerText = "MQTT: Connection Lost";
-        console.error("MQTT connection lost:", responseObject.errorMessage);
-      };
+      client.onConnectionLost = (responseObject) => {
+        document.getElementById("status").innerText = "MQTT: Connection Lost";
+        console.error("MQTT connection lost:", responseObject.errorMessage);
+      };
 
-      client.onMessageArrived = (message) => {
-        console.log("Message received:", message.payloadString);
-      };
+      client.onMessageArrived = (message) => {
+        console.log("Message received:", message.payloadString);
+      };
 
-      const connectOptions = {
-        useSSL: true,  // บังคับใช้ SSL สำหรับพอร์ต 8884
-        onSuccess: () => {
-          document.getElementById("status").innerText = "MQTT: Connected to " + mqttConfig.host;
-          console.log("Connected to MQTT broker");
-        },
-        onFailure: (err) => {
-          document.getElementById("status").innerText = "MQTT: Connection Failed";
-          console.error("Connection failed:", err);
-          console.error("MQTT Connection failed:", err.errorMessage);
-        }
-      };
+      const connectOptions = {
+        useSSL: true,  // ใช้ SSL สำหรับพอร์ต 8884
+        onSuccess: () => {
+          document.getElementById("status").innerText = "MQTT: Connected to " + mqttConfig.host;
+          console.log("Connected to MQTT broker");
+        },
+        onFailure: (err) => {
+          document.getElementById("status").innerText = "MQTT: Connection Failed";
+          console.error("Connection failed:", err);
+          console.error("MQTT Connection failed:", err.errorMessage);
+        }
+      };
 
-      if (mqttConfig.username && mqttConfig.password) {
-        connectOptions.userName = mqttConfig.username;
-        connectOptions.password = mqttConfig.password;
-      }
+      if (mqttConfig.username && mqttConfig.password) {
+        connectOptions.userName = mqttConfig.username;
+        connectOptions.password = mqttConfig.password;
+      }
 
-      client.connect(connectOptions);
-    }
+      client.connect(connectOptions);
+    }
 
-    function publishMessage(payload) {
-      if (client && client.isConnected()) {
-        const message = new Paho.MQTT.Message(payload);
-        message.destinationName = mqttConfig.topic;
-        client.send(message);
-      } else {
-        console.warn("MQTT is not connected, message not sent:", payload);
-      }
-    }
+    function publishMessage(payload) {
+      if (client && client.isConnected()) {
+        const message = new Paho.MQTT.Message(payload);
+        message.destinationName = mqttConfig.topic;
+        client.send(message);
+      } else {
+        console.warn("MQTT is not connected, message not sent:", payload);
+      }
+    }
 
-    // ---- MODEL INIT ----
-    async function init(facingMode) {
-      connectMQTT(); // Connect MQTT before starting webcam
+    // ---- MODEL INIT ----
+    async function init(facingMode) {
+      connectMQTT(); // Connect MQTT ก่อนเริ่มการทำงานของกล้อง
 
-      const modelURL = URL + "model.json";
-      const metadataURL = URL + "metadata.json";
+      const modelURL = URL + "model.json";
+      const metadataURL = URL + "metadata.json";
 
-      model = await tmImage.load(modelURL, metadataURL);
-      maxPredictions = model.getTotalClasses();
+      model = await tmImage.load(modelURL, metadataURL);
+      maxPredictions = model.getTotalClasses();
 
-      webcam = new tmImage.Webcam(224, 224, false);
-      try {
-        await webcam.setup({ facingMode: facingMode });
-        await webcam.play();
-        if (!webcam.canvas) throw new Error("Webcam canvas is not initialized");
-        window.requestAnimationFrame(loop);
-      } catch (e) {
-        console.error("Webcam setup failed:", e);
-        document.getElementById("label-container").innerText = "Error: " + e.message;
-        return;
-      }
+      webcam = new tmImage.Webcam(224, 224, false);
+      try {
+        await webcam.setup({ facingMode: facingMode });
+        await webcam.play();
+        if (!webcam.canvas) throw new Error("Webcam canvas is not initialized");
+        window.requestAnimationFrame(loop);
+      } catch (e) {
+        console.error("Webcam setup failed:", e);
+        document.getElementById("label-container").innerText = "Error: " + e.message;
+        return;
+      }
 
-      document.getElementById("webcam-container").appendChild(webcam.canvas);
-      labelContainer = document.getElementById("label-container");
-      labelContainer.innerHTML = "";
-      for (let i = 0; i < maxPredictions; i++) {
-        labelContainer.appendChild(document.createElement("div"));
-      }
-    }
+      document.getElementById("webcam-container").appendChild(webcam.canvas);
+      labelContainer = document.getElementById("label-container");
+      labelContainer.innerHTML = "";
+      for (let i = 0; i < maxPredictions; i++) {
+        labelContainer.appendChild(document.createElement("div"));
+      }
+    }
 
-    async function loop() {
-      webcam.update();
-      await predict();
-      window.requestAnimationFrame(loop);
-    }
+    async function loop() {
+      webcam.update();
+      await predict();
+      window.requestAnimationFrame(loop);
+    }
 
-    async function predict() {
-      const prediction = await model.predict(webcam.canvas);
-      let topPrediction = prediction[0];
-      for (let i = 0; i < maxPredictions; i++) {
-        const classPrediction = prediction[i].className + ": " + prediction[i].probability.toFixed(2);
-        labelContainer.childNodes[i].innerHTML = classPrediction;
-        if (prediction[i].probability > topPrediction.probability) {
-          topPrediction = prediction[i];
-        }
-      }
+    async function predict() {
+      const prediction = await model.predict(webcam.canvas);
+      let topPrediction = prediction[0];
+      for (let i = 0; i < maxPredictions; i++) {
+        const classPrediction = prediction[i].className + ": " + prediction[i].probability.toFixed(2);
+        labelContainer.childNodes[i].innerHTML = classPrediction;
+        if (prediction[i].probability > topPrediction.probability) {
+          topPrediction = prediction[i];
+        }
+      }
 
-      // ส่งข้อมูลไปยัง MQTT
-      publishMessage(JSON.stringify({
-        class: topPrediction.className,
-        probability: topPrediction.probability.toFixed(2),
-        timestamp: new Date().toISOString()
-      }));
-    }
+      // ส่งข้อมูลไปยัง MQTT
+      publishMessage(JSON.stringify({
+        class: topPrediction.className,
+        probability: topPrediction.probability.toFixed(2),
+        timestamp: new Date().toISOString()
+      }));
+    }
 
-    function stop() {
-      if (webcam) {
-        webcam.stop();
-        document.getElementById("webcam-container").innerHTML = '';
-        document.getElementById("label-container").innerHTML = '';
-      }
-      if (client && client.isConnected()) {
-        client.disconnect();
-        document.getElementById("status").innerText = "MQTT: Disconnected";
-      }
-    }
-  </script>
+    function stop() {
+      if (webcam) {
+        webcam.stop();
+        document.getElementById("webcam-container").innerHTML = '';
+        document.getElementById("label-container").innerHTML = '';
+      }
+      if (client && client.isConnected()) {
+        client.disconnect();
+        document.getElementById("status").innerText = "MQTT: Disconnected";
+      }
+    }
+  </script>
 </body>
 </html>
-
-
 
