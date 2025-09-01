@@ -42,7 +42,7 @@
     let model, webcam, labelContainer, maxPredictions;
     let client, mqttConfig;
 
-  // ---- MQTT CONNECT ----
+ // ---- MQTT CONNECT ----
 function connectMQTT() {
   mqttConfig = {
     host: document.getElementById("host").value,
@@ -52,6 +52,7 @@ function connectMQTT() {
   };
 
   // แก้ไข: สร้าง URL ที่สมบูรณ์แบบสำหรับ WebSocket ที่ปลอดภัย (WSS)
+  // ต้องรวม path เป็นส่วนหนึ่งของ URL ด้วย
   const mqttUrl = "wss://" + mqttConfig.host + ":" + mqttConfig.port + "/mqtt";
   client = new Paho.MQTT.Client(mqttUrl, mqttConfig.clientId);
 
@@ -164,5 +165,6 @@ function connectMQTT() {
   </script>
 </body>
 </html>
+
 
 
