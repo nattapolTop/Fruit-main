@@ -42,48 +42,48 @@
     let model, webcam, labelContainer, maxPredictions;
     let client, mqttConfig;
 
-    // ---- MQTT CONNECT ----
-    function connectMQTT() {
-      mqttConfig = {
-        host: document.getElementById("host").value,
-        port: parseInt(document.getElementById("port").value),
-        path: document.getElementById("path").value || "/mqtt",
-        clientId: document.getElementById("clientId").value || "webclient-" + Math.random().toString(16).substr(2, 8),
-        topic: document.getElementById("topic").value || "tm/prediction"
-      };
+  // ---- MQTT CONNECT ----
+function connectMQTT() {
+  mqttConfig = {
+    host: document.getElementById("host").value,
+    port: parseInt(document.getElementById("port").value),
+    clientId: document.getElementById("clientId").value || "webclient-" + Math.random().toString(16).substr(2, 8),
+    topic: document.getElementById("topic").value || "tm/prediction"
+  };
 
-      // แก้ไข: เพิ่ม path เพื่อให้ Paho.MQTT.Client ทำงานกับ WebSocket ได้
-      client = new Paho.MQTT.Client(mqttConfig.host, mqttConfig.port, mqttConfig.path, mqttConfig.clientId);
+  // แก้ไข: สร้าง URL ที่สมบูรณ์แบบสำหรับ WebSocket ที่ปลอดภัย (WSS)
+  const mqttUrl = "wss://" + mqttConfig.host + ":" + mqttConfig.port + "/mqtt";
+  client = new Paho.MQTT.Client(mqttUrl, mqttConfig.clientId);
 
-      client.onConnectionLost = (responseObject) => {
-        document.getElementById("status").innerText = "MQTT: Connection Lost";
-        console.error("MQTT connection lost:", responseObject.errorMessage);
-      };
+  client.onConnectionLost = (responseObject) => {
+    document.getElementById("status").innerText = "MQTT: Connection Lost";
+    console.error("MQTT connection lost:", responseObject.errorMessage);
+  };
 
-      client.onMessageArrived = (message) => {
-        console.log("Message received:", message.payloadString);
-      };
+  client.onMessageArrived = (message) => {
+    console.log("Message received:", message.payloadString);
+  };
 
-      const connectOptions = {
-        useSSL: true,  // ใช้ SSL สำหรับพอร์ต 8884
-        onSuccess: () => {
-          document.getElementById("status").innerText = "MQTT: Connected to " + mqttConfig.host;
-          console.log("Connected to MQTT broker");
-        },
-        onFailure: (err) => {
-          document.getElementById("status").innerText = "MQTT: Connection Failed";
-          console.error("Connection failed:", err);
-          console.error("MQTT Connection failed:", err.errorMessage);
-        }
-      };
-
-      if (mqttConfig.username && mqttConfig.password) {
-        connectOptions.userName = mqttConfig.username;
-        connectOptions.password = mqttConfig.password;
-      }
-
-      client.connect(connectOptions);
+  const connectOptions = {
+    // เนื่องจากเราใช้ wss:// ใน URL แล้ว จึงไม่จำเป็นต้องใช้ useSSL: true ซ้ำ
+    onSuccess: () => {
+      document.getElementById("status").innerText = "MQTT: Connected to " + mqttConfig.host;
+      console.log("Connected to MQTT broker");
+    },
+    onFailure: (err) => {
+      document.getElementById("status").innerText = "MQTT: Connection Failed";
+      console.error("Connection failed:", err);
+      console.error("MQTT Connection failed:", err.errorMessage);
     }
+  };
+
+  if (mqttConfig.username && mqttConfig.password) {
+    connectOptions.userName = mqttConfig.username;
+    connectOptions.password = mqttConfig.password;
+  }
+
+  client.connect(connectOptions);
+}
 
     function publishMessage(payload) {
       if (client && client.isConnected()) {
@@ -164,4 +164,5 @@
   </script>
 </body>
 </html>
+
 
