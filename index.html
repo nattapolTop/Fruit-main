@@ -52,7 +52,7 @@
         topic: document.getElementById("topic").value || "tm/prediction"
       };
 
-      client = new Paho.MQTT.Client(mqttConfig.host, mqttConfig.port, mqttConfig.clientId);
+      client = new Paho.MQTT.Client(mqttConfig.host, mqttConfig.port, "/mqtt", mqttConfig.clientId);
 
       client.onConnectionLost = (responseObject) => {
         document.getElementById("status").innerText = "MQTT: Connection Lost";
@@ -163,5 +163,6 @@
   </script>
 </body>
 </html>
+
 
 
