@@ -42,7 +42,7 @@
     let model, webcam, labelContainer, maxPredictions;
     let client, mqttConfig;
 
- // ---- MQTT CONNECT ----
+// ---- MQTT CONNECT ----
 function connectMQTT() {
   mqttConfig = {
     host: document.getElementById("host").value,
@@ -85,7 +85,6 @@ function connectMQTT() {
 
   client.connect(connectOptions);
 }
-
     function publishMessage(payload) {
       if (client && client.isConnected()) {
         const message = new Paho.MQTT.Message(payload);
@@ -165,6 +164,7 @@ function connectMQTT() {
   </script>
 </body>
 </html>
+
 
 
 
