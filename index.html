@@ -79,36 +79,23 @@
         try {
           const clientId = "web_" + Math.floor(Math.random() * 10000);
           // เปลี่ยนพอร์ตเป็น 1883 (MQTT non-SSL) หรือ 8883 (SSL) หรือ 8884 ตามที่เหมาะสม
-          mqttClient = new Paho.MQTT.Client("broker.hivemq.com", 1883, "/mqtt", clientId);
-
-          mqttClient.onConnectionLost = (responseObject) => {
-            console.error("MQTT lost:", responseObject.errorMessage);
-            updateStatus("MQTT lost. Reconnecting...", "error");
-            if (isRunning) {
-              setTimeout(() => connectMQTT().catch(() => {}), 5000);
-            }
-          };
-
-          mqttClient.onMessageArrived = (message) => {
-            console.log("Message arrived:", message.payloadString);
-          };
-
-          mqttClient.connect({
-            useSSL: false, // ใช้ SSL/TLS หรือไม่ (เปลี่ยนเป็น true หากใช้พอร์ต 8883)
-            timeout: 30,
-            keepAliveInterval: 60,
-            cleanSession: true,
-            onSuccess: () => {
-              console.log("MQTT connected");
-              updateStatus("MQTT เชื่อมต่อสำเร็จ", "success");
-              resolve();
-            },
-            onFailure: (e) => {
-              console.error("MQTT failed:", e.errorMessage);
-              updateStatus("MQTT ล้มเหลว: " + e.errorMessage, "error");
-              reject(e);
-            }
-          });
+          mqttClient = new Paho.MQTT.Client("wss://broker.hivemq.com:8884/mqtt", clientId);  // ใช้ wss://
+mqttClient.connect({
+  useSSL: true, // ใช้ SSL/TLS
+  timeout: 30,
+  keepAliveInterval: 60,
+  cleanSession: true,
+  onSuccess: () => {
+    console.log("MQTT connected via WSS");
+    updateStatus("MQTT เชื่อมต่อสำเร็จ", "success");
+    resolve();
+  },
+  onFailure: (e) => {
+    console.error("MQTT failed:", e.errorMessage);
+    updateStatus("MQTT ล้มเหลว: " + e.errorMessage, "error");
+    reject(e);
+  }
+});
         } catch (error) {
           console.error("MQTT setup error:", error);
           updateStatus("MQTT setup error: " + (error?.message || JSON.stringify(error)), "error");
@@ -259,3 +246,4 @@
 </body>
 
 </html>
+
